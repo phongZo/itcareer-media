@@ -1,0 +1,204 @@
+_BUILD_NUMBER = env.BUILD_NUMBER
+_BRANCH_NAME = env.BRANCH_NAME
+
+TIMEZONE = "GMT+7"
+APP_BOOT_TIME_SECOND = 30
+SLACK_CHANNEL_NAME = "GMQ6JQ1FT"
+
+TARTGET_FOLDER_DEPLOY="/opt/deploy/spos"
+JAR_NAME = "spos-media-spring-boot.jar"
+
+
+APP_NAME = "spos-media"
+LOG_PATH="/var/log/spos/media"
+LOG_FILE_NAME="spos-media.log"
+
+PORT_DEV=8087
+HOST_DEV="192.168.201.16"
+
+
+BUILD_FOLER="dev-ops"
+TARTGET_BRANCH_DEPLOY="dev"
+
+//node("slave-gcp") {
+node{
+    try {
+        if (_BRANCH_NAME.matches(TARTGET_BRANCH_DEPLOY)) {
+            notifyBuild("STARTED", SLACK_CHANNEL_NAME)
+        }
+
+        stage ("Checkout source") {
+            checkout scm
+        }
+
+        buildDev()
+
+        
+        currentBuild.result = "SUCCESS"
+    } catch (e) {
+        currentBuild.result = "FAILURE"
+        throw e
+    } finally {
+        if (_BRANCH_NAME.matches(TARTGET_BRANCH_DEPLOY)) {
+            def time = formatMilisecondTime(currentBuild.timeInMillis, TIMEZONE)
+            def duration = durationFormat(currentBuild.duration)
+            def buildDetail = "\n————————————————————" +
+                              "\n*Build Time:* ${time}" +
+                              "\n*Duration:* ${duration}" +
+                              "\n*Change Log (DESC):*\n${getChangeLog()}"
+
+            notifyBuild(currentBuild.result, SLACK_CHANNEL_NAME, buildDetail)
+        }
+    }
+
+}
+
+def buildDev(){
+    if (_BRANCH_NAME.matches(TARTGET_BRANCH_DEPLOY)) {
+
+        stage ("Build source") {
+            withEnv( ["PATH+MAVEN=/usr/local/src/apache-maven/bin"] ) {
+                sh """
+                    cp -r source/spos-media/* dev-ops/
+                    cd dev-ops
+                    cp config/* src/main/resources/
+                    mvn clean package -Dmaven.test.skip
+                """
+            }
+        }
+
+        stage("Upload to remote") {
+
+            def remote = [:]
+            remote.name = "Server"
+            remote.host = HOST_DEV
+            remote.allowAnyHosts = true
+
+            withCredentials([sshUserPrivateKey(credentialsId: 'ssh_credentials', keyFileVariable: 'identity', passphraseVariable: '', usernameVariable: 'userName')]) {
+                remote.user = userName
+                remote.identityFile = identity
+
+                try {
+                    // Stop old service
+                    sshCommand remote: remote, command: "systemctl stop ${APP_NAME}.service"
+                    sshCommand remote: remote, command: "rm -rf /lib/systemd/system/${APP_NAME}.service"
+
+                    // Remove log info
+                    sshCommand remote: remote, command: "rm -rf /etc/rsyslog.d/${APP_NAME}.conf"
+                    sshCommand remote: remote, command: "systemctl restart rsyslog"
+                } catch (e) {
+
+                }
+                
+                
+                // Delete old data
+                sshRemove remote: remote, path: "${TARTGET_FOLDER_DEPLOY}/${APP_NAME}-dev"
+                sshCommand remote: remote, command: "mkdir -p ${TARTGET_FOLDER_DEPLOY}/${APP_NAME}-dev"
+
+                // Replace some params by env on log template
+                LOG_PATH_ESC=LOG_PATH.replace("/", "\\/")
+                sh """
+                    sed -i 's/{APP_ID}/${APP_NAME}/g' ./${BUILD_FOLER}/logs-template.conf
+                    sed -i 's/{LOG_PATH}/${LOG_PATH_ESC}\\/${LOG_FILE_NAME}/g' ./${BUILD_FOLER}/logs-template.conf
+                """
+
+                // Replace some params by env on application service
+                TARTGET_FOLDER_DEPLOY_ESC=TARTGET_FOLDER_DEPLOY.replace("/", "\\/")
+                sh """
+                    sed -i 's/{APP_ID}/${APP_NAME}/g' ./${BUILD_FOLER}/service-template-dev.service
+                    sed -i 's/{ENV}/dev/g' ./${BUILD_FOLER}/service-template-dev.service
+                    sed -i 's/{PORT}/${PORT_DEV}/g' ./${BUILD_FOLER}/config/application-dev.properties
+                    sed -i 's/{CONFIG_LOCATION}/${TARTGET_FOLDER_DEPLOY_ESC}\\/${APP_NAME}-dev/g' ./${BUILD_FOLER}/service-template-dev.service
+                """
+                
+                // Upload build to remote
+                sshPut remote: remote, from: "./${BUILD_FOLER}/target/${JAR_NAME}", into: "${TARTGET_FOLDER_DEPLOY}/${APP_NAME}-dev/app.jar"
+                sshPut remote: remote, from: "./${BUILD_FOLER}/service-template-dev.service", into: "${TARTGET_FOLDER_DEPLOY}/${APP_NAME}-dev/${APP_NAME}.service"
+                sshPut remote: remote, from: "./${BUILD_FOLER}/logs-template.conf", into: "${TARTGET_FOLDER_DEPLOY}/${APP_NAME}-dev/${APP_NAME}.conf"
+                sshPut remote: remote, from: "./${BUILD_FOLER}/config/application-dev.properties", into: "${TARTGET_FOLDER_DEPLOY}/${APP_NAME}-dev/"
+                sshPut remote: remote, from: "./${BUILD_FOLER}/config/application.properties", into: "${TARTGET_FOLDER_DEPLOY}/${APP_NAME}-dev/"
+                
+                // Init log dir
+                sshCommand remote: remote, command: "mkdir -p ${LOG_PATH} && rm -rf ${LOG_PATH}\\/${LOG_FILE_NAME}  && touch ${LOG_PATH}\\/${LOG_FILE_NAME}"
+                
+                // Deploy log service
+                sshCommand remote: remote, command: "mv ${TARTGET_FOLDER_DEPLOY}/${APP_NAME}-dev/${APP_NAME}.conf /etc/rsyslog.d/${APP_NAME}.conf && systemctl restart rsyslog"
+
+                // Deploy service
+                sshCommand remote: remote, command: "mv ${TARTGET_FOLDER_DEPLOY}/${APP_NAME}-dev/${APP_NAME}.service /lib/systemd/system/${APP_NAME}.service"
+                sshCommand remote: remote, command: "chmod 644 /lib/systemd/system/${APP_NAME}.service && systemctl daemon-reload"
+                sshCommand remote: remote, command: "systemctl enable ${APP_NAME}.service"
+                sshCommand remote: remote, command: "systemctl start ${APP_NAME}.service"
+            }
+            
+        }
+
+        stage ("Deploy") {
+            sleep(APP_BOOT_TIME_SECOND)
+        }
+
+    }
+}
+
+// ================================
+// HELPER FUNCTION
+// ================================
+
+def notifyEnv(String message = "",String channelName) {
+    def colorName = "good"
+    def emoji = ":white_check_mark:"
+    
+    def text = "${emoji} ${message}"
+    slackSend (channel: channelName, failOnError: true, color: colorName, message: text)
+}
+
+def notifyBuild(String buildStatus, String channelName, String message = "") {
+    def colorName = ""
+    def emoji = ""
+    if (buildStatus == "STARTED") {
+        colorName = "#2196f3"
+        emoji = ":fast_forward:"
+    } else if (buildStatus == "SUCCESS") {
+        colorName = "good"
+        emoji = ":white_check_mark:"
+    } else {
+        colorName = "#dc3545"
+        emoji = ":x:"
+    }
+
+    def text = "${emoji} ${buildStatus}: Job <${env.BUILD_URL}/console|${env.JOB_NAME} - build ${env.BUILD_NUMBER}>"
+    if (!message.isEmpty()) {
+        // concat a Combining Grapheme Joiner character U+034F before special character to prevent markdown formatting
+        // [char] => U+034F [char]
+        // reference: https://en.wikipedia.org/wiki/Combining_Grapheme_Joiner
+        text += message.replaceAll("`", "͏`")
+    }
+
+    slackSend (channel: channelName, failOnError: true, color: colorName, message: text)
+}
+
+def getChangeLog() {
+    def changeLogSets = currentBuild.changeSets
+    if (changeLogSets.isEmpty()) {
+        return "    (No changes)"
+    }
+
+    def text = ""
+    for (int i = changeLogSets.size() - 1; i >= 0; i--) {
+        for (def entry in changeLogSets[i].items) {
+            text += ":white_small_square: ${entry.author} - ${entry.msg}\n"
+        }
+    }
+    return text
+}
+
+def formatMilisecondTime(timeInMillis, timeZone) {
+    return new Date(timeInMillis).format("MMM dd, yyyy HH:mm:ss", TimeZone.getTimeZone(timeZone))
+}
+
+def durationFormat(long milisecond) {
+    def min = milisecond.intdiv(1000).intdiv(60)
+    def sec = milisecond.intdiv(1000) % 60
+    def result = (min > 0 ? "${min}m " : "") + (sec > 0 ? "${sec}s" : "")
+    return result
+}

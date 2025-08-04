@@ -1,0 +1,35 @@
+/target/
+!.mvn/wrapper/maven-wrapper.jar
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+*.log
+
+### NetBeans ###
+/nbproject/private/
+/build/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+
+# project ignore
+source/spos-media/application-production.properties
+source/spos-media/deploy_ec2.sh
+source/spos-media/execute_jar_on_vm.sh
+source/spos-media/target
+source/spos-media/logs
+source/spos-media/.idea
+source/spos-media/*.iml
