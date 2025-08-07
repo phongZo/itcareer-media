@@ -1,5 +1,5 @@
 #!/bin/bash
-SERVER_DEPLOY=192.168.155.13
+SERVER_DEPLOY=192.168.1.103
 TARGET_DIR=/opt/deploy/dreamcareer/media
 APP_ID=itdream-media
 PACKAGE_NAME=com.itcareer.media

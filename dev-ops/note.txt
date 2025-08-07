@@ -1,6 +1,0 @@
-Note for dev ops
-Build: mvn clean package -Dmaven.test.skip
-
-
-
-
