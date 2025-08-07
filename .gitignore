@@ -26,10 +26,10 @@
 /.nb-gradle/
 
 # project ignore
-source/spos-media/application-production.properties
-source/spos-media/deploy_ec2.sh
-source/spos-media/execute_jar_on_vm.sh
-source/spos-media/target
-source/spos-media/logs
-source/spos-media/.idea
-source/spos-media/*.iml
+source/itcareer-media/application-production.properties
+source/itcareer-media/deploy_ec2.sh
+source/itcareer-media/execute_jar_on_vm.sh
+source/itcareer-media/target
+source/itcareer-media/logs
+source/itcareer-media/.idea
+source/itcareer-media/*.iml
