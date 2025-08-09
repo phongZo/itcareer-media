@@ -8,6 +8,8 @@ import com.itcareer.media.form.UploadBase64Form;
 import com.itcareer.media.form.UploadFileForm;
 import com.itcareer.media.jwt.ItcareerJwt;
 import com.itcareer.media.service.OrgMediaApiService;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.Cacheable;
@@ -114,5 +116,31 @@ public class FileController extends ABasicController{
         }
         apiMessageDto.setMessage("Delete list file success");
         return apiMessageDto;
+    }
+
+    @DeleteMapping(value = "/delete", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ApiMessageDto<String> deleteFile(@RequestParam String filePath){
+        ApiMessageDto<String> apiMessageDto = new ApiMessageDto<>();
+        try {
+            Path path = Paths.get(filePath).normalize();
+            if (path.getNameCount() < 2) {
+                apiMessageDto.setResult(false);
+                apiMessageDto.setMessage("Invalid file path");
+                return apiMessageDto;
+            }
+
+            String rootFolder = path.getName(0).toString();
+            String subPath = path.subpath(1, path.getNameCount()).toString();
+
+            orgMediaApiService.deleteByFilePath(rootFolder, subPath);
+            apiMessageDto.setMessage("delete success");
+            return apiMessageDto;
+
+        } catch (Exception e) {
+            log.error("Error occurred while deleting", e);
+            apiMessageDto.setResult(false);
+            apiMessageDto.setMessage("Error occurred while deleting");
+            return apiMessageDto;
+        }
     }
 }

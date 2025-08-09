@@ -145,6 +145,57 @@ public class OrgMediaApiService {
         }
     }
 
+    public void deleteByFilePath(String rootFolder, String subPath) {
+        try {
+            String basePath = rootDirectory + ItcareerMediaConstant.DIRECTORY_GENERAL + "/" + rootFolder;
+
+            if ("video".equalsIgnoreCase(rootFolder)) {
+                // Xóa folder con cấp 2
+                Path path = Paths.get(subPath); // e.g., 1_83723/file.m3u8
+                if (path.getNameCount() < 1) {
+                    log.warn("======> Invalid video path: {}", subPath);
+                }
+
+                String folderName = path.getName(0).toString();
+                File targetFolder = new File(basePath + "/" + folderName);
+
+                log.info("======> Deleting video folder: {}", targetFolder.getAbsolutePath());
+
+                if (targetFolder.exists() && targetFolder.isDirectory()) {
+                    deleteDirectory(targetFolder.toPath());
+                    log.info("======> Video folder '{}' deleted successfully", targetFolder.getAbsolutePath());
+                } else {
+                    log.warn("======> Video folder not found or not a directory: {}", targetFolder.getAbsolutePath());
+                }
+
+            } else {
+                // Xóa trực tiếp file (không có folder con)
+                File targetFile = new File(basePath + "/" + subPath);
+                log.info("======> Deleting file: {}", targetFile.getAbsolutePath());
+
+                if (targetFile.exists() && targetFile.isFile()) {
+                    if (targetFile.delete()) {
+                        log.info("======> File '{}' deleted successfully", targetFile.getAbsolutePath());
+                    } else {
+                        log.warn("======> Failed to delete file: {}", targetFile.getAbsolutePath());
+                    }
+                } else {
+                    log.warn("======> File not found or is not a file: {}", targetFile.getAbsolutePath());
+                }
+            }
+
+        } catch (Exception e) {
+            log.error("======> Error occurred while deleting file/folder", e);
+        }
+    }
+
+    private void deleteDirectory(Path path) throws IOException {
+        Files.walk(path)
+            .sorted(Comparator.reverseOrder())
+            .map(Path::toFile)
+            .forEach(File::delete);
+    }
+
     public Resource loadFileAsResource(String folder, String fileName) {
         String directory = rootDirectory + ItcareerMediaConstant.DIRECTORY_GENERAL;
         System.out.println("User.home: "+System.getProperty("spring.config.location"));
