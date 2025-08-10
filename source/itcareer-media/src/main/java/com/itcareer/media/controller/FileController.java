@@ -121,26 +121,18 @@ public class FileController extends ABasicController{
     @DeleteMapping(value = "/delete", produces = MediaType.APPLICATION_JSON_VALUE)
     public ApiMessageDto<String> deleteFile(@RequestParam String filePath){
         ApiMessageDto<String> apiMessageDto = new ApiMessageDto<>();
-        try {
-            Path path = Paths.get(filePath).normalize();
-            if (path.getNameCount() < 2) {
-                apiMessageDto.setResult(false);
-                apiMessageDto.setMessage("Invalid file path");
-                return apiMessageDto;
-            }
-
-            String rootFolder = path.getName(0).toString();
-            String subPath = path.subpath(1, path.getNameCount()).toString();
-
-            orgMediaApiService.deleteByFilePath(rootFolder, subPath);
-            apiMessageDto.setMessage("delete success");
-            return apiMessageDto;
-
-        } catch (Exception e) {
-            log.error("Error occurred while deleting", e);
+        Path path = Paths.get(filePath).normalize();
+        if (path.getNameCount() < 2) {
             apiMessageDto.setResult(false);
-            apiMessageDto.setMessage("Error occurred while deleting");
+            apiMessageDto.setMessage("Invalid file path");
             return apiMessageDto;
         }
+
+        String rootFolder = path.getName(0).toString();
+        String subPath = path.subpath(1, path.getNameCount()).toString();
+
+        orgMediaApiService.deleteByFilePath(rootFolder, subPath);
+        apiMessageDto.setMessage("Delete success");
+        return apiMessageDto;
     }
 }

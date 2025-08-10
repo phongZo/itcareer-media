@@ -148,31 +148,24 @@ public class OrgMediaApiService {
     public void deleteByFilePath(String rootFolder, String subPath) {
         try {
             String basePath = rootDirectory + ItcareerMediaConstant.DIRECTORY_GENERAL + "/" + rootFolder;
+            Path subPathObj = Paths.get(subPath);
 
-            if ("video".equalsIgnoreCase(rootFolder)) {
-                // Xóa folder con cấp 2
-                Path path = Paths.get(subPath); // e.g., 1_83723/file.m3u8
-                if (path.getNameCount() < 1) {
-                    log.warn("======> Invalid video path: {}", subPath);
-                }
+            boolean isFolderKind = !subPathObj.getFileName().toString().contains(".");
 
-                String folderName = path.getName(0).toString();
+            if (isFolderKind) {
+                String folderName = subPathObj.getName(0).toString();
                 File targetFolder = new File(basePath + "/" + folderName);
 
-                log.info("======> Deleting video folder: {}", targetFolder.getAbsolutePath());
-
+                log.info("======> Deleting folder: {}", targetFolder.getAbsolutePath());
                 if (targetFolder.exists() && targetFolder.isDirectory()) {
                     deleteDirectory(targetFolder.toPath());
-                    log.info("======> Video folder '{}' deleted successfully", targetFolder.getAbsolutePath());
+                    log.info("======> Folder '{}' deleted successfully", targetFolder.getAbsolutePath());
                 } else {
-                    log.warn("======> Video folder not found or not a directory: {}", targetFolder.getAbsolutePath());
+                    log.warn("======> Folder not found or not a directory: {}", targetFolder.getAbsolutePath());
                 }
-
             } else {
-                // Xóa trực tiếp file (không có folder con)
                 File targetFile = new File(basePath + "/" + subPath);
                 log.info("======> Deleting file: {}", targetFile.getAbsolutePath());
-
                 if (targetFile.exists() && targetFile.isFile()) {
                     if (targetFile.delete()) {
                         log.info("======> File '{}' deleted successfully", targetFile.getAbsolutePath());
@@ -185,7 +178,7 @@ public class OrgMediaApiService {
             }
 
         } catch (Exception e) {
-            log.error("======> Error occurred while deleting file/folder", e);
+            log.error("======> Error occurred while deleting file/folder, rootFolder={}, subPath={}", rootFolder, subPath, e);
         }
     }
 
