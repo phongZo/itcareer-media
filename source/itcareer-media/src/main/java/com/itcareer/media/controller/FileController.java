@@ -5,14 +5,28 @@ import com.itcareer.media.dto.ApiMessageDto;
 import com.itcareer.media.dto.UploadFileDto;
 import com.itcareer.media.form.DeleteListFileForm;
 import com.itcareer.media.form.UploadBase64Form;
+import com.itcareer.media.form.UploadCertificateForm;
 import com.itcareer.media.form.UploadFileForm;
 import com.itcareer.media.jwt.ItcareerJwt;
 import com.itcareer.media.service.OrgMediaApiService;
+import com.itextpdf.text.BaseColor;
+import com.itextpdf.text.DocumentException;
+import com.itextpdf.text.pdf.BaseFont;
+import com.itextpdf.text.pdf.PdfContentByte;
+import com.itextpdf.text.pdf.PdfReader;
+import com.itextpdf.text.pdf.PdfStamper;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.InputStream;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
@@ -20,12 +34,12 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.*;
-
 import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/v1/file")
@@ -134,5 +148,135 @@ public class FileController extends ABasicController{
         orgMediaApiService.deleteByFilePath(rootFolder, subPath);
         apiMessageDto.setMessage("Delete success");
         return apiMessageDto;
+    }
+
+    @PostMapping(value = "/upload-certificate", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ApiMessageDto<UploadFileDto> uploadCertificate(@Valid @RequestBody UploadCertificateForm form, BindingResult bindingResult) {
+        ApiMessageDto<UploadFileDto> result = new ApiMessageDto<>();
+        ItcareerJwt jwt = getSessionFromToken();
+        if(jwt == null || jwt.getUserKind() == null){
+            result.setResult(false);
+            result.setMessage("Not valid additional data");
+            return result;
+        }
+
+        Integer userKind = getSessionFromToken().getUserKind();
+        if (!userKind.equals(ItcareerMediaConstant.USER_KIND_ADMIN) &&
+            !userKind.equals(ItcareerMediaConstant.USER_KIND_STUDENT) &&
+            !userKind.equals(ItcareerMediaConstant.USER_KIND_EDUCATOR)) {
+
+            result.setResult(false);
+            result.setMessage("Invalid user kind");
+            return result;
+        }
+
+        PdfReader reader = null;
+        PdfStamper stamper = null;
+        Path tmpFont = null;
+        ByteArrayOutputStream outputArray = null;
+
+        try {
+            // Load PDF template từ resources/files/
+            ClassPathResource pdfRes = new ClassPathResource("files/certificate.pdf");
+            InputStream pdfIn = pdfRes.getInputStream();
+            reader = new PdfReader(pdfIn);
+
+            // Chuẩn bị output stream
+            outputArray = new ByteArrayOutputStream();
+
+            // Tạo PdfStamper (có thể ném DocumentException)
+            stamper = new PdfStamper(reader, outputArray);
+
+            // Lấy canvas page 1 (nếu template ở trang khác, đổi chỉ số)
+            PdfContentByte canvas = stamper.getOverContent(1);
+
+            // Copy font Unicode (TTF) từ resources/fonts -> file tạm (BaseFont.createFont cần đường dẫn file)
+            // Đảm bảo bạn có file TTF unicode (ví dụ Quintessential-Regular.ttf) tại src/main/resources/fonts/
+            ClassPathResource fontRes = new ClassPathResource("fonts/Quintessential-Regular.ttf");
+            tmpFont = Files.createTempFile("tmp-font-", ".ttf");
+            try (InputStream fis = fontRes.getInputStream()) {
+                Files.copy(fis, tmpFont, StandardCopyOption.REPLACE_EXISTING);
+            }
+
+            // Load font với IDENTITY_H để hỗ trợ Unicode (tiếng Việt)
+            BaseFont bf = BaseFont.createFont(tmpFont.toAbsolutePath().toString(), BaseFont.IDENTITY_H, BaseFont.EMBEDDED);
+
+            // Che placeholder Username
+            canvas.setColorFill(BaseColor.WHITE);
+            canvas.rectangle(880, 570, 200, 49); // toạ độ và kích thước khớp chỗ [ Username ]
+            canvas.fill();
+
+            // Viết text Username
+            canvas.beginText();
+            canvas.setFontAndSize(bf, 32);
+            canvas.setColorFill(BaseColor.BLACK);
+            canvas.showTextAligned(PdfContentByte.ALIGN_CENTER, form.getUsername(), 970, 580, 0);
+            canvas.endText();
+
+            // Che placeholder Simulation Name
+            canvas.setColorFill(BaseColor.WHITE);
+            canvas.rectangle(880, 482, 170, 31); // toạ độ khớp chỗ [ Simulation Name ]
+            canvas.fill();
+
+            // Viết text Simulation Name
+            canvas.beginText();
+            canvas.setFontAndSize(bf, 20);
+            canvas.setColorFill(BaseColor.BLACK);
+            canvas.showTextAligned(PdfContentByte.ALIGN_CENTER, form.getSimulationName(), 970, 485, 0);
+            canvas.endText();
+
+            // Đóng stamper để ghi nội dung vào outputArray
+            // (gọi close() ở đây an toàn, và set stamper = null để tránh đóng lại trong finally)
+            stamper.close();
+            stamper = null;
+
+            // 10) Tạo MultipartFile từ bytes và gọi service upload
+            byte[] modifiedPdf = outputArray.toByteArray();
+            MultipartFile multipartFile = new ByteArrayMultipartFile(modifiedPdf, "certificate.pdf", "application/pdf");
+
+            UploadFileForm uploadFileForm = new UploadFileForm();
+            uploadFileForm.setType("DOCUMENT");
+            uploadFileForm.setFile(multipartFile);
+
+            result = orgMediaApiService.storeFile(uploadFileForm);
+
+        } catch (IOException | DocumentException e) {
+            e.printStackTrace();
+        } finally {
+            if (stamper != null) {
+                try { stamper.close(); } catch (Exception ignore) {}
+            }
+            if (reader != null) {
+                try { reader.close(); } catch (Exception ignore) {}
+            }
+            if (outputArray != null) {
+                try { outputArray.close(); } catch (Exception ignore) {}
+            }
+            if (tmpFont != null) {
+                try { Files.deleteIfExists(tmpFont); } catch (IOException ignore) {}
+            }
+        }
+        return result;
+    }
+
+    private static class ByteArrayMultipartFile implements MultipartFile {
+        private final byte[] content;
+        private final String originalFilename;
+        private final String contentType;
+
+        public ByteArrayMultipartFile(byte[] content, String originalFilename, String contentType) {
+            this.content = content != null ? content : new byte[0];
+            this.originalFilename = originalFilename;
+            this.contentType = contentType;
+        }
+
+        @Override public String getName() { return originalFilename; }
+        @Override public String getOriginalFilename() { return originalFilename; }
+        @Override public String getContentType() { return contentType; }
+        @Override public boolean isEmpty() { return content.length == 0; }
+        @Override public long getSize() { return content.length; }
+        @Override public byte[] getBytes() { return content; }
+        @Override public InputStream getInputStream() { return new ByteArrayInputStream(content); }
+        @Override public void transferTo(File dest) throws IOException { Files.write(dest.toPath(), content); }
     }
 }
