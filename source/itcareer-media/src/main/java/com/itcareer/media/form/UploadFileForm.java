@@ -23,5 +23,4 @@ public class UploadFileForm {
 
     private String app;
     private Long accountId;
-    private Boolean isCert = false;
 }

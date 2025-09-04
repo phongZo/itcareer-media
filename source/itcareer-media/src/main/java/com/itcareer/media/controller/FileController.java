@@ -69,7 +69,7 @@ public class FileController extends ABasicController{
             result.setMessage("Invalid user kind");
             return result;
         }
-
+        uploadFileForm.setAccountId(getSessionFromToken().getAccountId());
         return orgMediaApiService.storeFile(uploadFileForm);
     }
 
@@ -97,14 +97,14 @@ public class FileController extends ABasicController{
         return orgMediaApiService.storeFileByBase64(uploadBase64Form);
     }
 
-    @GetMapping("/download/{folder}/{fileName:.+}")
+    @GetMapping("/download/{folder}/{subFolder}/{fileName:.+}")
     @Cacheable("images")
-    public ResponseEntity<Resource> downloadFile(@PathVariable String folder,@PathVariable String fileName, HttpServletRequest request) throws FileNotFoundException {
-        return getResource(folder,fileName,request);
+    public ResponseEntity<Resource> downloadFile(@PathVariable String folder, @PathVariable String subFolder, @PathVariable String fileName, HttpServletRequest request) throws FileNotFoundException {
+        return getResource(folder,subFolder,fileName,request);
     }
 
-    private ResponseEntity<Resource> getResource(String folder, String fileName, HttpServletRequest request) {
-        Resource resource= orgMediaApiService.loadFileAsResource(folder , fileName);
+    private ResponseEntity<Resource> getResource(String folder, String subFolder, String fileName, HttpServletRequest request) {
+        Resource resource= orgMediaApiService.loadFileAsResource(folder, subFolder , fileName);
         String contentType = null;
         try {
             contentType = request.getServletContext().getMimeType(resource.getFile().getAbsolutePath());
@@ -238,7 +238,6 @@ public class FileController extends ABasicController{
             uploadFileForm.setType("DOCUMENT");
             uploadFileForm.setFile(multipartFile);
             uploadFileForm.setAccountId(getSessionFromToken().getAccountId());
-            uploadFileForm.setIsCert(true);
 
             result = orgMediaApiService.storeFile(uploadFileForm);
 

@@ -67,12 +67,7 @@ public class OrgMediaApiService {
             }
             //upload to uploadFolder/TYPE/id
             String finalFile = (uploadFileForm.getApp()!=null ? uploadFileForm.getApp() +"_" :"")+ uploadFileForm.getType() + "_" + RandomStringUtils.randomAlphanumeric(10) + "." + ext;
-            String typeFolder;
-            if (uploadFileForm.getIsCert()){
-                typeFolder = File.separator + uploadFileForm.getType() + File.separator + uploadFileForm.getAccountId();
-            } else {
-                typeFolder = File.separator + uploadFileForm.getType();
-            }
+            String typeFolder = File.separator + uploadFileForm.getType() + File.separator + uploadFileForm.getAccountId();
             Path fileStorageLocation;
             String tenantFolder = "";
             fileStorageLocation = Paths.get(rootDirectory + ItcareerMediaConstant.DIRECTORY_GENERAL + typeFolder).toAbsolutePath().normalize();
@@ -193,12 +188,12 @@ public class OrgMediaApiService {
             .forEach(File::delete);
     }
 
-    public Resource loadFileAsResource(String folder, String fileName) {
+    public Resource loadFileAsResource(String folder, String subFolder, String fileName) {
         String directory = rootDirectory + ItcareerMediaConstant.DIRECTORY_GENERAL;
         System.out.println("User.home: "+System.getProperty("spring.config.location"));
-        System.out.println("get file: "+folder+"/"+fileName+", path: "+directory);
+        System.out.println("get file: "+folder+"/"+subFolder+"/"+fileName+", path: "+directory);
         try {
-            Path fileStorageLocation = Paths.get(directory + File.separator + folder).toAbsolutePath().normalize();
+            Path fileStorageLocation = Paths.get(directory + File.separator + folder + File.separator + subFolder).toAbsolutePath().normalize();
             Path fP = fileStorageLocation.resolve(fileName).normalize();
             Resource resource = new UrlResource(fP.toUri());
             if (resource.exists()) {
@@ -206,7 +201,7 @@ public class OrgMediaApiService {
             }
         } catch (MalformedURLException ex) {
             //log.error(ex.getMessage(), ex);
-            System.out.println("Error get file: "+folder+"/"+fileName+", path: "+directory);
+            System.out.println("Error get file: "+folder+"/"+subFolder+"/"+fileName+", path: "+directory);
 
         }
         return null;
