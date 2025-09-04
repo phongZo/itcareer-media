@@ -22,4 +22,6 @@ public class UploadFileForm {
     private MultipartFile file;
 
     private String app;
+    private Long accountId;
+    private Boolean isCert = false;
 }

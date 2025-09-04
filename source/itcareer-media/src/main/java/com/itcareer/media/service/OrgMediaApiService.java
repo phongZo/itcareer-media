@@ -67,7 +67,12 @@ public class OrgMediaApiService {
             }
             //upload to uploadFolder/TYPE/id
             String finalFile = (uploadFileForm.getApp()!=null ? uploadFileForm.getApp() +"_" :"")+ uploadFileForm.getType() + "_" + RandomStringUtils.randomAlphanumeric(10) + "." + ext;
-            String typeFolder = File.separator + uploadFileForm.getType();
+            String typeFolder;
+            if (uploadFileForm.getIsCert()){
+                typeFolder = File.separator + uploadFileForm.getType() + File.separator + uploadFileForm.getAccountId();
+            } else {
+                typeFolder = File.separator + uploadFileForm.getType();
+            }
             Path fileStorageLocation;
             String tenantFolder = "";
             fileStorageLocation = Paths.get(rootDirectory + ItcareerMediaConstant.DIRECTORY_GENERAL + typeFolder).toAbsolutePath().normalize();
@@ -86,7 +91,6 @@ public class OrgMediaApiService {
         }
         return apiMessageDto;
     }
-
 
     public ApiMessageDto<UploadFileDto> storeFileByBase64(UploadBase64Form uploadBase64Form) {
         // Normalize file name

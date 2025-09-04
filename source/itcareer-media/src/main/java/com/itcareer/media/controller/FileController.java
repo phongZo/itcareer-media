@@ -237,6 +237,8 @@ public class FileController extends ABasicController{
             UploadFileForm uploadFileForm = new UploadFileForm();
             uploadFileForm.setType("DOCUMENT");
             uploadFileForm.setFile(multipartFile);
+            uploadFileForm.setAccountId(getSessionFromToken().getAccountId());
+            uploadFileForm.setIsCert(true);
 
             result = orgMediaApiService.storeFile(uploadFileForm);
 
