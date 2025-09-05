@@ -8,13 +8,23 @@ import com.itcareer.media.form.UploadBase64Form;
 import com.itcareer.media.form.UploadCertificateForm;
 import com.itcareer.media.form.UploadFileForm;
 import com.itcareer.media.jwt.ItcareerJwt;
+import com.itcareer.media.service.CertificateService;
 import com.itcareer.media.service.OrgMediaApiService;
 import com.itextpdf.text.BaseColor;
 import com.itextpdf.text.DocumentException;
+import com.itextpdf.text.pdf.AcroFields;
 import com.itextpdf.text.pdf.BaseFont;
 import com.itextpdf.text.pdf.PdfContentByte;
 import com.itextpdf.text.pdf.PdfReader;
+import com.itextpdf.text.pdf.PdfSignatureAppearance;
 import com.itextpdf.text.pdf.PdfStamper;
+import com.itextpdf.text.pdf.security.BouncyCastleDigest;
+import com.itextpdf.text.pdf.security.DigestAlgorithms;
+import com.itextpdf.text.pdf.security.ExternalDigest;
+import com.itextpdf.text.pdf.security.ExternalSignature;
+import com.itextpdf.text.pdf.security.MakeSignature;
+import com.itextpdf.text.pdf.security.PdfPKCS7;
+import com.itextpdf.text.pdf.security.PrivateKeySignature;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -23,7 +33,14 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.security.GeneralSecurityException;
+import java.security.PrivateKey;
+import java.security.Security;
+import java.security.cert.Certificate;
+import java.security.cert.X509Certificate;
+import java.util.List;
 import lombok.extern.slf4j.Slf4j;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.core.io.ClassPathResource;
@@ -48,6 +65,8 @@ import org.springframework.web.multipart.MultipartFile;
 public class FileController extends ABasicController{
     @Autowired
     OrgMediaApiService orgMediaApiService;
+    @Autowired
+    CertificateService certificateService;
 
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE, produces= MediaType.APPLICATION_JSON_VALUE)
     public ApiMessageDto<UploadFileDto> upload(@Valid UploadFileForm uploadFileForm, BindingResult bindingResult) {
@@ -231,8 +250,31 @@ public class FileController extends ABasicController{
             stamper = null;
 
             // 10) Tạo MultipartFile từ bytes và gọi service upload
-            byte[] modifiedPdf = outputArray.toByteArray();
-            MultipartFile multipartFile = new ByteArrayMultipartFile(modifiedPdf, "certificate.pdf", "application/pdf");
+            // Ký PDF
+            byte[] unsignedPdf = outputArray.toByteArray();
+            ByteArrayOutputStream signedOut = new ByteArrayOutputStream();
+
+            PrivateKey pk = certificateService.getPrivateKey();
+            Certificate[] chain = certificateService.getCertificateChain();
+
+            // Đăng ký provider BouncyCastle (hỗ trợ thuật toán ký số)
+            if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null) {
+                Security.addProvider(new BouncyCastleProvider());
+            }
+
+            // Tạo PDF để ký, thêm một số thông tin để ký
+            PdfReader pdfReader = new PdfReader(new ByteArrayInputStream(unsignedPdf));
+            PdfStamper signer = PdfStamper.createSignature(pdfReader, signedOut, '\0');
+            PdfSignatureAppearance appearance = signer.getSignatureAppearance();
+            appearance.setReason("Issued by ITDream");
+            appearance.setLocation("ITDream");
+
+            // Thực hiện dùng thuật toán SHA256 và private key để ký
+            ExternalDigest digest = new BouncyCastleDigest();
+            ExternalSignature signature = new PrivateKeySignature(pk, DigestAlgorithms.SHA256, "BC");
+            MakeSignature.signDetached(appearance, digest, signature, chain, null, null, null, 0, MakeSignature.CryptoStandard.CMS);
+
+            MultipartFile multipartFile = new ByteArrayMultipartFile(signedOut.toByteArray(), "certificate.pdf", "application/pdf");
 
             UploadFileForm uploadFileForm = new UploadFileForm();
             uploadFileForm.setType("DOCUMENT");
@@ -241,7 +283,7 @@ public class FileController extends ABasicController{
 
             result = orgMediaApiService.storeFile(uploadFileForm);
 
-        } catch (IOException | DocumentException e) {
+        } catch (Exception e) {
             e.printStackTrace();
         } finally {
             if (stamper != null) {
@@ -256,6 +298,65 @@ public class FileController extends ABasicController{
             if (tmpFont != null) {
                 try { Files.deleteIfExists(tmpFont); } catch (IOException ignore) {}
             }
+        }
+        return result;
+    }
+
+    @PostMapping(value = "/verify", consumes = MediaType.MULTIPART_FORM_DATA_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    public ApiMessageDto<Boolean> verifyCertificate(@RequestParam("file") MultipartFile file) {
+        ApiMessageDto<Boolean> result = new ApiMessageDto<>();
+        ItcareerJwt jwt = getSessionFromToken();
+        if(jwt == null || jwt.getUserKind() == null){
+            result.setResult(false);
+            result.setMessage("Not valid additional data");
+            return result;
+        }
+
+        Integer userKind = getSessionFromToken().getUserKind();
+        if (!userKind.equals(ItcareerMediaConstant.USER_KIND_ADMIN) &&
+            !userKind.equals(ItcareerMediaConstant.USER_KIND_STUDENT) &&
+            !userKind.equals(ItcareerMediaConstant.USER_KIND_EDUCATOR)) {
+
+            result.setResult(false);
+            result.setMessage("Invalid user kind");
+            return result;
+        }
+
+        try {
+            // Đọc chữ ký trong file PDF
+            Certificate trustedCert = certificateService.getCertificate();
+
+            PdfReader reader = new PdfReader(file.getInputStream());
+            AcroFields af = reader.getAcroFields();
+            List<String> names = af.getSignatureNames();
+
+            // Nếu PDF không có chữ ký
+            if (names.isEmpty()) {
+                result.setResult(false);
+                result.setMessage("No signature found in certificate");
+                return result;
+            }
+
+            boolean valid = false;
+            // Kiểm tra file PDF có chữ ký có hợp lệ hay không
+            for (String name : names) {
+                PdfPKCS7 pkcs7 = af.verifySignature(name);
+                valid = pkcs7.verify();
+                if (valid) {
+                    X509Certificate signerCert = pkcs7.getSigningCertificate();
+                    valid = signerCert.equals(trustedCert);
+                    break;
+                }
+            }
+
+            result.setResult(valid);
+            result.setMessage(valid ? "Certificate is valid" : "Certificate is invalid");
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            result.setResult(false);
+            result.setMessage("Error verifying certificate");
+            result.setData(false);
         }
         return result;
     }
