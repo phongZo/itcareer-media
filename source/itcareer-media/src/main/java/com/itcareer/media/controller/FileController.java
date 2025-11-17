@@ -11,7 +11,6 @@ import com.itcareer.media.jwt.ItcareerJwt;
 import com.itcareer.media.service.CertificateService;
 import com.itcareer.media.service.OrgMediaApiService;
 import com.itextpdf.text.BaseColor;
-import com.itextpdf.text.DocumentException;
 import com.itextpdf.text.pdf.AcroFields;
 import com.itextpdf.text.pdf.BaseFont;
 import com.itextpdf.text.pdf.PdfContentByte;
@@ -33,7 +32,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
-import java.security.GeneralSecurityException;
 import java.security.PrivateKey;
 import java.security.Security;
 import java.security.cert.Certificate;
@@ -249,7 +247,7 @@ public class FileController extends ABasicController{
             stamper.close();
             stamper = null;
 
-            // 10) Tạo MultipartFile từ bytes và gọi service upload
+            // Tạo MultipartFile từ bytes và gọi service upload
             // Ký PDF
             byte[] unsignedPdf = outputArray.toByteArray();
             ByteArrayOutputStream signedOut = new ByteArrayOutputStream();
