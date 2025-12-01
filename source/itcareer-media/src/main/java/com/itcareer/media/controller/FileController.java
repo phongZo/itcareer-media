@@ -209,7 +209,7 @@ public class FileController extends ABasicController{
 
             // Copy font Unicode (TTF) từ resources/fonts -> file tạm (BaseFont.createFont cần đường dẫn file)
             // Đảm bảo bạn có file TTF unicode (ví dụ Quintessential-Regular.ttf) tại src/main/resources/fonts/
-            ClassPathResource fontRes = new ClassPathResource("fonts/Quintessential-Regular.ttf");
+            ClassPathResource fontRes = new ClassPathResource("fonts/timesbd.ttf");
             tmpFont = Files.createTempFile("tmp-font-", ".ttf");
             try (InputStream fis = fontRes.getInputStream()) {
                 Files.copy(fis, tmpFont, StandardCopyOption.REPLACE_EXISTING);
