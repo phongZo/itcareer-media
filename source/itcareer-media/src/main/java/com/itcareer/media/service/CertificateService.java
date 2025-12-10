@@ -19,9 +19,10 @@ public class CertificateService {
 
   public KeyStore loadKeyStore() throws Exception {
     KeyStore ks = KeyStore.getInstance("PKCS12");
+    String keystorePath = certificateProperties.getKeystore();
 
     // Resolve resource từ classpath hoặc file system
-    Resource res = resourceLoader.getResource(certificateProperties.getKeystore());
+    Resource res = resourceLoader.getResource(keystorePath);
 
     try (InputStream is = res.getInputStream()) {
       ks.load(is, certificateProperties.getStorepass().toCharArray());

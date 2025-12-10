@@ -1,5 +1,5 @@
 [Unit]
-Description=SPOS media service 
+Description=ITDream media service 
 
 [Service]
 #User=root #use user with restricted permissions
