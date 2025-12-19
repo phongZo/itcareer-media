@@ -1,3 +1,4 @@
+com\itcareer\media\controller\FileController$ByteArrayMultipartFile.class
 com\itcareer\media\form\UploadBase64Form.class
 com\itcareer\media\config\AsyncConfig.class
 com\itcareer\media\jwt\ItcareerJwt.class
@@ -9,6 +10,7 @@ com\itcareer\media\MediaServiceApplication.class
 com\itcareer\media\BaseApplication.class
 com\itcareer\media\utils\SequenceGenerator.class
 com\itcareer\media\config\security\SecurityConfig.class
+com\itcareer\media\service\CertificateService.class
 com\itcareer\media\constant\ItcareerMediaConstant.class
 com\itcareer\media\exception\oauth\CustomOauthException.class
 com\itcareer\media\config\RestClientConfig.class
@@ -31,6 +33,7 @@ com\itcareer\media\utils\Utils.class
 com\itcareer\media\config\security\MethodSecurityConfig.class
 com\itcareer\media\dto\ResponseListDto$ResponseListDtoBuilder.class
 com\itcareer\media\dto\UploadFileDto.class
+com\itcareer\media\config\CertificateProperties.class
 com\itcareer\media\config\security\CustomTokenConverter.class
 com\itcareer\media\dto\ApiResponse.class
 com\itcareer\media\service\impl\UserServiceImpl.class
@@ -48,5 +51,6 @@ com\itcareer\media\dto\ABasicAdminDto.class
 com\itcareer\media\exception\NotFoundException.class
 com\itcareer\media\service\impl\LoggingServiceImpl.class
 com\itcareer\media\dto\ApiMessageDto.class
+com\itcareer\media\form\UploadCertificateForm.class
 com\itcareer\media\service\impl\AuthenticationFacadeServiceImpl.class
 com\itcareer\media\exception\GlobalExceptionHandler.class
